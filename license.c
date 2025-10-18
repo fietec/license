@@ -133,30 +133,41 @@ Licenses discover_licenses()
     return licenses;
 }
 
-bool create_license(char *license)
+bool create_license(const char *license)
 {
-    FILE *f_in = fopen(license, "r");
-    if (f_in == NULL){
+    FILE *f_in = fopen(license, "rb");
+    if (f_in == NULL) {
         eprintfn("License source file no longer exists: '%s'!", license);
         return false;
     }
-    FILE *f_out = fopen(LICENSE_NAME, "w");
-    if (f_out == NULL){
+
+    FILE *f_out = fopen(LICENSE_NAME, "wb");
+    if (f_out == NULL) {
         eprintfn("Could not open output file: '%s'!", LICENSE_NAME);
         fclose(f_in);
         return false;
     }
-    size_t nbytes = 128;
-    char buffer[nbytes];
+
+    unsigned char buffer[4096];
     size_t bytes_read;
-    while ((bytes_read = fread(buffer, 1, nbytes, f_in)) > 0){
-        if (bytes_read != fwrite(buffer, 1, bytes_read, f_out)){
+
+    while ((bytes_read = fread(buffer, 1, sizeof(buffer), f_in)) > 0) {
+        size_t bytes_written = fwrite(buffer, 1, bytes_read, f_out);
+        if (bytes_written != bytes_read) {
             eprintfn("Could not write all bytes to output file!");
             fclose(f_in);
             fclose(f_out);
             return false;
         }
     }
+
+    if (ferror(f_in)) {
+        eprintfn("Error reading input file!");
+        fclose(f_in);
+        fclose(f_out);
+        return false;
+    }
+
     fclose(f_in);
     fclose(f_out);
     return true;
