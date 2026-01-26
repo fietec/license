@@ -29,6 +29,8 @@ typedef struct{
 
 #define eprintfn(msg, ...) (fprintf(stderr, "[ERROR] "msg"\n", ##__VA_ARGS__))
 
+#define return_defer(val) do{result=(val); goto defer;}while(0)
+
 #define da_append(xs, x)                                                             \
     do {                                                                             \
         if ((xs)->count >= (xs)->capacity) {                                         \
@@ -50,15 +52,6 @@ char* shift_args(int *argc, char ***argv)
     *argc -= 1;
     *argv += 1;
     return result;
-}
-
-int stricmp(char const *a, char const *b)
-{
-    for (;; a++, b++) {
-        int d = tolower((unsigned char)*a) - tolower((unsigned char)*b);
-        if (d != 0 || !*a)
-            return d;
-    }
 }
 
 bool get_exe_path(char *buffer, size_t buffer_size)
@@ -101,7 +94,7 @@ void print_usage(const char *program_name, Licenses licenses)
     printf("  -h / --help  print this help message\n");
 }
 
-Licenses discover_licenses()
+Licenses discover_licenses(void)
 {
     Licenses licenses = {0};
     
@@ -176,9 +169,12 @@ bool create_license(const char *license)
 int main(int argc, char **argv)
 {
     if (!get_exe_path(program_dir, sizeof(program_dir))){
-        eprintfn("Could not fetch program directory!");
+        eprintfn("Could not find program directory!");
         return 1;
     }
+
+    int result = 0;
+
     get_parent_dir(program_dir, program_dir, sizeof(program_dir));
     // discover licenses
     Licenses licenses = discover_licenses();
@@ -188,18 +184,18 @@ int main(int argc, char **argv)
     if (argc <= 0){
         eprintfn("Missing argument!");
         print_usage(program_name, licenses);
-        return 1;
+        return_defer(1);
     }
     const char *arg = shift_args(&argc, &argv);
     for (size_t i=0; i<licenses.count; ++i){
         License license = licenses.items[i];
-        if (stricmp(arg, license.path+license.name_start) == 0){
+        if (strcasecmp(arg, license.path+license.name_start) == 0){
             if (!create_license(license.path)){
                 eprintfn("Could not create LICENSE file!");
-                return 1;
+                return_defer(1);
             }
             printf("[INFO] Successfully create license file!\n");
-            return 0;
+            return_defer(0);
         }
     }
     if (strcmp(arg, "--help") == 0 || strcmp(arg, "-h") == 0){
@@ -207,7 +203,9 @@ int main(int argc, char **argv)
     } else {
         eprintfn("Unknown license or option: '%s'!", arg);
         print_usage(program_name, licenses);
-        return 1;
+        return_defer(1);
     }
-    return 0;
+defer:
+    free(licenses.items);
+    return result;
 }
